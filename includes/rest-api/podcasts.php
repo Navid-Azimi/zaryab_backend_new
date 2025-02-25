@@ -7,6 +7,14 @@ add_action('rest_api_init', function () {
     ));
 });
 
+// Register the REST API route for retrieving a single podcast by slug.
+add_action('rest_api_init', function () {
+    register_rest_route('v1', '/podcasts/(?P<slug>[a-z0-9-]+)', array(
+        'methods'  => 'GET',
+        'callback' => 'zaryab_get_single_podcast',
+    ));
+});
+
 /**
  * Callback function for retrieving a list of podcasts.
  *
@@ -74,4 +82,63 @@ function zaryab_get_podcasts(WP_REST_Request $request) {
     );
 
     return new WP_REST_Response($response, 200);
+}
+
+
+/**
+ * Callback function for retrieving a single podcast by slug.
+ *
+ * It returns the following fields:
+ * - image (featured image)
+ * - slug
+ * - name (post title)
+ * - host
+ * - guest
+ * - duration
+ * - date (post's published date)
+ * - content (the post content)
+ * - mp3_file (the file URL from the ACF field)
+ *
+ * @param WP_REST_Request $request The current request object.
+ * @return WP_REST_Response|WP_Error JSON response with the podcast data or error if not found.
+ */
+function zaryab_get_single_podcast(WP_REST_Request $request) {
+    // Retrieve the podcast slug from the URL.
+    $slug = $request->get_param('slug');
+
+    // Query for the podcast post using the slug.
+    $args = array(
+        'post_type'      => 'podcast',
+        'name'           => $slug,
+        'posts_per_page' => 1,
+    );
+    $query = new WP_Query($args);
+
+    // If no podcast is found, return a 404 error.
+    if (!$query->have_posts()) {
+        return new WP_Error('no_podcast', 'No podcast found with the provided slug', array('status' => 404));
+    }
+
+    // Set up the post data.
+    $query->the_post();
+    $podcast_id = get_the_ID();
+
+    // Build the response data.
+    $data = array(
+        'image'      => get_the_post_thumbnail_url($podcast_id, 'full'), // Featured image.
+        'slug'       => get_post_field('post_name', $podcast_id),
+        'name'       => get_the_title(),
+        'host'       => get_field('host', $podcast_id),
+        'guest'      => get_field('guest', $podcast_id),
+        'duration'   => get_field('duration', $podcast_id),
+        'date'   => get_field('date', $podcast_id),
+        'content'    => apply_filters('the_content', get_the_content()),
+        'mp3_file'   => get_field('mp3_file', $podcast_id), // Assumes ACF returns the file URL.
+    );
+
+    // Reset post data to avoid conflicts.
+    wp_reset_postdata();
+
+    // Return the podcast data with a 200 status.
+    return new WP_REST_Response($data, 200);
 }
