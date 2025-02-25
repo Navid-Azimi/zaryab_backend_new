@@ -53,6 +53,7 @@ function zaryab_get_authors(WP_REST_Request $request) {
             $authors[] = array(
                 'name'          => get_the_title(),
                 'image'          => get_the_post_thumbnail_url(),
+                'slug'           => get_post_field('post_name', $author_id),
                 'job'           => get_field('job', $author_id),
                 'location'      => get_field('location', $author_id),
                 'total_letters' => get_field('total_letters', $author_id),
@@ -123,3 +124,5 @@ function zaryab_get_single_author(WP_REST_Request $request) {
     // Return the author data with a 200 status.
     return new WP_REST_Response($data, 200);
 }
+
+
