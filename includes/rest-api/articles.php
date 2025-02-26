@@ -136,7 +136,7 @@ function zaryab_get_articles(WP_REST_Request $request) {
  * Supports pagination via query parameters.
  */
 add_action('rest_api_init', function () {
-    register_rest_route('v1', '/articles/(?P<slug>[a-z0-9-]+)/similar', array(
+    register_rest_route('v1', '/articles/similar/(?P<slug>[a-z0-9-]+)', array(
         'methods'  => 'GET',
         'callback' => 'zaryab_get_similar_articles',
     ));
@@ -221,7 +221,7 @@ function zaryab_get_single_article(WP_REST_Request $request) {
     $article_id = $article_post->ID;
 
     // Retrieve the big_image ACF field (returns an array for SEO purposes).
-    $big_image = get_field('big_image', $article_id);
+    $big_image = get_field('big_image', $article_id)['url'];
     $title = get_the_title($article_id);
     $date_shamsi = get_field('date_shamsi', $article_id);
     $time = get_field('time', $article_id);
