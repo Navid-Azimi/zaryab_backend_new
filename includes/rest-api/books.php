@@ -46,7 +46,7 @@ function zaryab_get_featured_book() {
     $data = array(
         'title'         => get_the_title(),
         'featured_image' => get_the_post_thumbnail_url($book_id, 'full'),
-        'excerpt'       => get_the_excerpt(),
+        'excerpt'       => get_field('excerpt', $book_id),
         'slug'          => get_post_field('post_name', $book_id),
         'pdf'           => $pdf_url,
     );
