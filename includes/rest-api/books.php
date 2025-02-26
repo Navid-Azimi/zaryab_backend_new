@@ -135,6 +135,7 @@ function zaryab_get_single_book(WP_REST_Request $request) {
     // Build the response data.
     $data = array(
         'featured_image' => get_the_post_thumbnail_url($book_id, 'full'),
+        'big_image'     => get_field('big_image', $book_id)['url'],
         'collection'     => get_field('collection', $book_id),
         'date_shamsi'    => get_field('date_shamsi', $book_id),
         'time'           => get_field('time', $book_id),
