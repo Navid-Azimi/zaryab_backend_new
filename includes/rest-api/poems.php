@@ -7,6 +7,14 @@ add_action('rest_api_init', function () {
     ));
 });
 
+// Register the REST API route for retrieving a single poem by slug.
+add_action('rest_api_init', function () {
+    register_rest_route('v1', '/poems/(?P<slug>[a-z0-9-]+)', array(
+        'methods'  => 'GET',
+        'callback' => 'zaryab_get_single_poem',
+    ));
+});
+
 /**
  * Callback function for retrieving a paginated list of poems.
  *
@@ -103,4 +111,95 @@ function zaryab_get_excerpt_by_br($content, $num_br = 3) {
 
     // Return the first n lines joined by <br>
     return implode('<br>', array_slice($parts, 0, $num_br));
+}
+
+
+
+/**
+ * Callback function for retrieving a single poem by slug.
+ *
+ * Fields returned:
+ * - title
+ * - taxonomy (poem_collection)
+ * - date (acf field)
+ * - time (acf field)
+ * - taxonomy (poem_type)
+ * - content (first 3 lines)
+ * - author (detailed post object)
+ *
+ * @param WP_REST_Request $request The request object.
+ * @return WP_REST_Response JSON response.
+ */
+function zaryab_get_single_poem(WP_REST_Request $request) {
+    $slug = $request->get_param('slug');
+
+    // Query the poem by slug.
+    $poem = get_page_by_path($slug, OBJECT, 'poem');
+    if (!$poem) {
+        return new WP_Error('no_poem', 'No poem found with the provided slug', array('status' => 404));
+    }
+    $poem_id = $poem->ID;
+
+    // Extract first 3 lines of content based on <br> tags.
+    $content = get_the_content(null, false, $poem_id);
+
+    // Retrieve poem_collection taxonomy.
+    $poem_collections = get_the_terms($poem_id, 'poem_collection');
+    $poem_collection_list = zaryab_format_taxonomy($poem_collections);
+
+    // Retrieve poem_type taxonomy.
+    $poem_types = get_the_terms($poem_id, 'poem_type');
+    $poem_type_list = zaryab_format_taxonomy($poem_types);
+
+    // Retrieve the author post object.
+    $author_field = get_field('author', $poem_id);
+    $author_data = null;
+    if ($author_field) {
+        $author_id = $author_field->ID;
+        $author_data = array(
+            'featured_image' => get_the_post_thumbnail_url($author_id, 'full'),
+            'name'           => get_the_title($author_id),
+            'location'       => get_field('location', $author_id),
+            'job'            => get_field('job', $author_id),
+            'total_letters'  => get_field('total_letters', $author_id),
+            'age'            => get_field('age', $author_id),
+            'facebook'       => get_field('facebook', $author_id),
+            'instagram'      => get_field('instagram', $author_id),
+            'telegram'       => get_field('telegram', $author_id),
+            'youtube'        => get_field('youtube', $author_id),
+        );
+    }
+
+    // Build the final response.
+    $data = array(
+        'title'          => get_the_title($poem_id),
+        'poem_collection'=> $poem_collection_list,
+        'date'           => get_field('date', $poem_id),
+        'time'           => get_field('time', $poem_id),
+        'poem_type'      => $poem_type_list,
+        'content'        => $content,
+        'author'         => $author_data,
+    );
+
+    return new WP_REST_Response($data, 200);
+}
+
+/**
+ * Format taxonomy terms into a structured array.
+ *
+ * @param array|null|WP_Error $terms Taxonomy terms from `get_the_terms()`.
+ * @return array Structured list of terms.
+ */
+function zaryab_format_taxonomy($terms) {
+    $formatted = array();
+    if ($terms && !is_wp_error($terms)) {
+        foreach ($terms as $term) {
+            $formatted[] = array(
+                'id'   => $term->term_id,
+                'name' => $term->name,
+                'slug' => $term->slug,
+            );
+        }
+    }
+    return $formatted;
 }
