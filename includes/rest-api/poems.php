@@ -24,6 +24,14 @@ add_action('rest_api_init', function () {
     ));
 });
 
+// Register the REST API route for poem collection.
+add_action('rest_api_init', function () {
+    register_rest_route('v1', '/poems/collection/(?P<slug>[a-z0-9-]+)', array(
+        'methods'  => 'GET',
+        'callback' => 'zaryab_get_poems_by_collection',
+    ));
+});
+
 /**
  * Callback function for retrieving a paginated list of poems.
  *
@@ -237,6 +245,78 @@ function zaryab_get_similar_poems(WP_REST_Request $request) {
         'posts_per_page' => $per_page,
         'paged'          => $page,
         'post__not_in'   => array($exclude_id), // Exclude this poem
+    );
+
+    $query = new WP_Query($args);
+    $poems = array();
+
+    if ($query->have_posts()) {
+        while ($query->have_posts()) {
+            $query->the_post();
+            $poem_id = get_the_ID();
+
+            // Extract first 3 lines of content based on <br> tags
+            $content = get_the_content(null, false, $poem_id);
+            $excerpt = zaryab_get_excerpt_by_br($content, 3);
+
+            // Retrieve the author post object
+            $author_field = get_field('author', $poem_id);
+            $author_name  = is_object($author_field) ? get_the_title($author_field->ID) : '';
+
+            // Retrieve taxonomy terms (poem_type)
+            $terms = get_the_terms($poem_id, 'poem_type');
+            $poem_types = zaryab_format_taxonomy($terms);
+
+            $poems[] = array(
+                'title'          => get_the_title(),
+                'featured_image' => get_the_post_thumbnail_url($poem_id, 'full'),
+                'excerpt'        => $excerpt,
+                'author'         => $author_name,
+                'slug'           => get_post_field('post_name', $poem_id),
+                'date'           => get_field('date', $poem_id),
+                'time'           => get_field('time', $poem_id),
+                'poem_type'      => $poem_types,
+            );
+        }
+        wp_reset_postdata();
+    }
+
+    // Prepare response with pagination meta
+    $response = array(
+        'data' => $poems,
+        'meta' => array(
+            'total'    => (int) $query->found_posts,
+            'pages'    => (int) $query->max_num_pages,
+            'page'     => $page,
+            'per_page' => $per_page,
+        ),
+    );
+
+    return new WP_REST_Response($response, 200);
+}
+/**
+ * Retrieve poems filtered by poem_collection.
+ *
+ * @param WP_REST_Request $request The request object.
+ * @return WP_REST_Response JSON response with paginated poems in the collection.
+ */
+function zaryab_get_poems_by_collection(WP_REST_Request $request) {
+    $slug     = $request->get_param('slug');
+    $page     = (int) $request->get_param('page') ?: 1;
+    $per_page = (int) $request->get_param('per_page') ?: 10;
+
+    // Query poems that belong to the provided poem_collection
+    $args = array(
+        'post_type'      => 'poem',
+        'posts_per_page' => $per_page,
+        'paged'          => $page,
+        'tax_query'      => array(
+            array(
+                'taxonomy' => 'poem_collection',
+                'field'    => 'slug',
+                'terms'    => $slug,
+            ),
+        ),
     );
 
     $query = new WP_Query($args);
