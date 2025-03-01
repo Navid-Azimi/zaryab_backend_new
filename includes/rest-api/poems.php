@@ -200,27 +200,6 @@ function zaryab_get_single_poem(WP_REST_Request $request) {
 
     return new WP_REST_Response($data, 200);
 }
-
-/**
- * Format taxonomy terms into a structured array.
- *
- * @param array|null|WP_Error $terms Taxonomy terms from `get_the_terms()`.
- * @return array Structured list of terms.
- */
-function zaryab_format_taxonomy($terms) {
-    $formatted = array();
-    if ($terms && !is_wp_error($terms)) {
-        foreach ($terms as $term) {
-            $formatted[] = array(
-                'id'   => $term->term_id,
-                'name' => $term->name,
-                'slug' => $term->slug,
-            );
-        }
-    }
-    return $formatted;
-}
-
 /**
  * Retrieve similar poems, excluding the provided poem by slug.
  *
