@@ -349,14 +349,13 @@ function zaryab_get_stories_excluding_slug(WP_REST_Request $request)
 }
 
 /**
- * Retrieve a paginated list of stories filtered by a specific collection.
- *
- * Fields returned:
- * - featured_image, title, excerpt, slug, author name, date, duration, categories.
+ * Retrieve a paginated list of stories filtered by collection, categories, and story type.
  *
  * Query Parameters:
  * - page (default: 1)
  * - per_page (default: 10)
+ * - categories (comma-separated taxonomy slugs, optional)
+ * - story_type (comma-separated taxonomy slugs, optional)
  *
  * @param WP_REST_Request $request The request object.
  * @return WP_REST_Response JSON response with stories data and pagination.
@@ -364,21 +363,49 @@ function zaryab_get_stories_excluding_slug(WP_REST_Request $request)
 function zaryab_get_stories_by_collection(WP_REST_Request $request)
 {
     $collection_slug = $request->get_param('slug');
-    $page = (int)$request->get_param('page') ?: 1;
-    $per_page = (int)$request->get_param('per_page') ?: 10;
+    $page            = (int) $request->get_param('page') ?: 1;
+    $per_page        = (int) $request->get_param('per_page') ?: 10;
+    $categories      = $request->get_param('categories');  // Optional filter
+    $story_type      = $request->get_param('story_type');  // Optional filter
+
+    // Taxonomy filtering
+    $tax_query = array(
+        'relation' => 'AND',
+        array(
+            'taxonomy' => 'collection',
+            'field'    => 'slug',
+            'terms'    => $collection_slug,
+        ),
+    );
+
+    // Add `categories` filter if provided
+    if (!empty($categories)) {
+        $category_slugs = explode(',', $categories); // Convert comma-separated string to array
+        $tax_query[] = array(
+            'taxonomy' => 'categories',
+            'field'    => 'slug',
+            'terms'    => $category_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Add `story_type` filter if provided
+    if (!empty($story_type)) {
+        $story_type_slugs = explode(',', $story_type); // Convert comma-separated string to array
+        $tax_query[] = array(
+            'taxonomy' => 'story_type',
+            'field'    => 'slug',
+            'terms'    => $story_type_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
 
     // Query stories belonging to the specified collection taxonomy
     $args = array(
-        'post_type' => 'stories',
+        'post_type'      => 'stories',
         'posts_per_page' => $per_page,
-        'paged' => $page,
-        'tax_query' => array(
-            array(
-                'taxonomy' => 'collection',
-                'field' => 'slug',
-                'terms' => $collection_slug,
-            ),
-        ),
+        'paged'          => $page,
+        'tax_query'      => $tax_query,
     );
 
     $query = new WP_Query($args);
@@ -391,7 +418,7 @@ function zaryab_get_stories_by_collection(WP_REST_Request $request)
 
             // Retrieve the author post object from ACF
             $author_field = get_field('author', $story_id);
-            $author_name = is_object($author_field) ? get_the_title($author_field->ID) : '';
+            $author_name  = is_object($author_field) ? get_the_title($author_field->ID) : '';
 
             // Retrieve taxonomy terms (categories)
             $terms = get_the_terms($story_id, 'categories');
@@ -399,13 +426,13 @@ function zaryab_get_stories_by_collection(WP_REST_Request $request)
 
             $stories[] = array(
                 'featured_image' => get_the_post_thumbnail_url($story_id, 'full'),
-                'title' => get_the_title(),
-                'excerpt' => get_the_excerpt(),
-                'slug' => get_post_field('post_name', $story_id),
-                'author' => $author_name,
-                'date' => get_field('date', $story_id),
-                'duration' => get_field('duration', $story_id),
-                'categories' => $categories,
+                'title'          => get_the_title(),
+                'excerpt'        => get_the_excerpt(),
+                'slug'           => get_post_field('post_name', $story_id),
+                'author'         => $author_name,
+                'date'           => get_field('date', $story_id),
+                'duration'       => get_field('duration', $story_id),
+                'categories'     => $categories,
             );
         }
         wp_reset_postdata();
@@ -415,9 +442,9 @@ function zaryab_get_stories_by_collection(WP_REST_Request $request)
     $response = array(
         'data' => $stories,
         'meta' => array(
-            'total' => (int)$query->found_posts,
-            'pages' => (int)$query->max_num_pages,
-            'page' => $page,
+            'total'    => (int) $query->found_posts,
+            'pages'    => (int) $query->max_num_pages,
+            'page'     => $page,
             'per_page' => $per_page,
         ),
     );
