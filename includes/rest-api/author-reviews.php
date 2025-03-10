@@ -79,25 +79,59 @@ function get_author_review_data($post_id)
 }
 
 /**
- * Callback for listing author reviews.
+ * Retrieve a paginated list of author reviews with multi-slug filtering by `review_type` and `categories`.
  *
- * Supports pagination using:
+ * Query Parameters:
  * - page (default: 1)
  * - per_page (default: 10)
+ * - review_type (comma-separated taxonomy slugs, optional)
+ * - categories (comma-separated taxonomy slugs, optional)
  *
- * @param WP_REST_Request $request The current request object.
- * @return WP_REST_Response JSON response containing reviews data and meta information.
+ * @param WP_REST_Request $request The request object.
+ * @return WP_REST_Response JSON response with reviews data and pagination.
  */
 function zaryab_get_author_reviews(WP_REST_Request $request)
 {
     $page = (int)$request->get_param('page') ?: 1;
     $per_page = (int)$request->get_param('per_page') ?: 10;
+    $review_type = $request->get_param('review_type'); // Optional filter (comma-separated slugs)
+    $categories = $request->get_param('categories');  // Optional filter (comma-separated slugs)
 
+    $tax_query = array('relation' => 'AND');
+
+    // Process `review_type` filter (supports multiple slugs)
+    if (!empty($review_type)) {
+        $review_type_slugs = explode(',', $review_type); // Convert comma-separated string to array
+        $tax_query[] = array(
+            'taxonomy' => 'review_type',
+            'field' => 'slug',
+            'terms' => $review_type_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Process `categories` filter (supports multiple slugs)
+    if (!empty($categories)) {
+        $category_slugs = explode(',', $categories); // Convert comma-separated string to array
+        $tax_query[] = array(
+            'taxonomy' => 'categories',
+            'field' => 'slug',
+            'terms' => $category_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Define query args
     $args = array(
         'post_type' => 'review',
         'posts_per_page' => $per_page,
         'paged' => $page,
     );
+
+    // Add taxonomy filtering if at least one filter is applied
+    if (!empty($review_type) || !empty($categories)) {
+        $args['tax_query'] = $tax_query;
+    }
 
     $query = new WP_Query($args);
     $reviews = array();
@@ -110,6 +144,7 @@ function zaryab_get_author_reviews(WP_REST_Request $request)
         wp_reset_postdata();
     }
 
+    // Prepare response with pagination meta
     $response = array(
         'data' => $reviews,
         'meta' => array(
