@@ -33,27 +33,59 @@ add_action('rest_api_init', function () {
 });
 
 /**
- * Callback function for retrieving a paginated list of poems.
- *
- * Fields returned:
- * - title, featured image, custom excerpt (first 3 lines), author name, slug, date, time, taxonomy (poem_type).
+ * Retrieve a paginated list of poems filtered by `categories` and `poem_type`.
  *
  * Query Parameters:
  * - page (default: 1)
  * - per_page (default: 10)
+ * - categories (comma-separated taxonomy slugs, optional)
+ * - poem_type (comma-separated taxonomy slugs, optional)
  *
  * @param WP_REST_Request $request The request object.
- * @return WP_REST_Response JSON response.
+ * @return WP_REST_Response JSON response with poems data and pagination.
  */
 function zaryab_get_poems(WP_REST_Request $request) {
-    $page     = (int) $request->get_param('page') ?: 1;
-    $per_page = (int) $request->get_param('per_page') ?: 10;
+    $page       = (int) $request->get_param('page') ?: 1;
+    $per_page   = (int) $request->get_param('per_page') ?: 10;
+    $categories = $request->get_param('categories');  // Optional filter
+    $poem_type  = $request->get_param('poem_type');   // Optional filter
 
+    // Taxonomy filtering
+    $tax_query = array('relation' => 'AND');
+
+    // Add `categories` filter if provided
+    if (!empty($categories)) {
+        $category_slugs = explode(',', $categories);
+        $tax_query[] = array(
+            'taxonomy' => 'categories',
+            'field'    => 'slug',
+            'terms'    => $category_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Add `poem_type` filter if provided
+    if (!empty($poem_type)) {
+        $poem_type_slugs = explode(',', $poem_type);
+        $tax_query[] = array(
+            'taxonomy' => 'poem_type',
+            'field'    => 'slug',
+            'terms'    => $poem_type_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Query args
     $args = array(
         'post_type'      => 'poem',
         'posts_per_page' => $per_page,
         'paged'          => $page,
     );
+
+    // Add taxonomy filtering if at least one filter is applied
+    if (!empty($categories) || !empty($poem_type)) {
+        $args['tax_query'] = $tax_query;
+    }
 
     $query = new WP_Query($args);
     $poems = array();
@@ -71,7 +103,7 @@ function zaryab_get_poems(WP_REST_Request $request) {
             $author_field = get_field('author', $poem_id);
             $author_name  = is_object($author_field) ? get_the_title($author_field->ID) : '';
 
-            // Retrieve taxonomy terms
+            // Retrieve taxonomy terms (poem_type)
             $terms = get_the_terms($poem_id, 'poem_type');
             $poem_types = array();
             if ($terms && !is_wp_error($terms)) {
@@ -98,7 +130,7 @@ function zaryab_get_poems(WP_REST_Request $request) {
         wp_reset_postdata();
     }
 
-    // Prepare the response with pagination metadata
+    // Prepare response with pagination meta
     $response = array(
         'data' => $poems,
         'meta' => array(
@@ -111,6 +143,7 @@ function zaryab_get_poems(WP_REST_Request $request) {
 
     return new WP_REST_Response($response, 200);
 }
+
 
 /**
  * Extract the first `n` lines of the content based on `<br>` tags.
