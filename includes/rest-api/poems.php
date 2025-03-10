@@ -307,28 +307,62 @@ function zaryab_get_similar_poems(WP_REST_Request $request) {
     return new WP_REST_Response($response, 200);
 }
 /**
- * Retrieve poems filtered by poem_collection.
+ * Retrieve paginated poems filtered by `poem_collection`, `categories`, and `poem_type`.
+ *
+ * Query Parameters:
+ * - page (default: 1)
+ * - per_page (default: 10)
+ * - categories (comma-separated taxonomy slugs, optional)
+ * - poem_type (comma-separated taxonomy slugs, optional)
  *
  * @param WP_REST_Request $request The request object.
  * @return WP_REST_Response JSON response with paginated poems in the collection.
  */
 function zaryab_get_poems_by_collection(WP_REST_Request $request) {
-    $slug     = $request->get_param('slug');
-    $page     = (int) $request->get_param('page') ?: 1;
-    $per_page = (int) $request->get_param('per_page') ?: 10;
+    $slug       = $request->get_param('slug');
+    $page       = (int) $request->get_param('page') ?: 1;
+    $per_page   = (int) $request->get_param('per_page') ?: 10;
+    $categories = $request->get_param('categories');  // Optional filter
+    $poem_type  = $request->get_param('poem_type');   // Optional filter
+
+    // Taxonomy filtering
+    $tax_query = array(
+        'relation' => 'AND',
+        array(
+            'taxonomy' => 'poem_collection',
+            'field'    => 'slug',
+            'terms'    => $slug,
+        ),
+    );
+
+    // Add `categories` filter if provided
+    if (!empty($categories)) {
+        $category_slugs = explode(',', $categories);
+        $tax_query[] = array(
+            'taxonomy' => 'categories',
+            'field'    => 'slug',
+            'terms'    => $category_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Add `poem_type` filter if provided
+    if (!empty($poem_type)) {
+        $poem_type_slugs = explode(',', $poem_type);
+        $tax_query[] = array(
+            'taxonomy' => 'poem_type',
+            'field'    => 'slug',
+            'terms'    => $poem_type_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
 
     // Query poems that belong to the provided poem_collection
     $args = array(
         'post_type'      => 'poem',
         'posts_per_page' => $per_page,
         'paged'          => $page,
-        'tax_query'      => array(
-            array(
-                'taxonomy' => 'poem_collection',
-                'field'    => 'slug',
-                'terms'    => $slug,
-            ),
-        ),
+        'tax_query'      => $tax_query,
     );
 
     $query = new WP_Query($args);
@@ -378,3 +412,4 @@ function zaryab_get_poems_by_collection(WP_REST_Request $request) {
 
     return new WP_REST_Response($response, 200);
 }
+
