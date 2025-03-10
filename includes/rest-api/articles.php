@@ -1,4 +1,12 @@
 <?php
+//List articles
+add_action('rest_api_init', function () {
+    register_rest_route('v1', '/articles', array(
+        'methods' => 'GET',
+        'callback' => 'zaryab_get_articles',
+    ));
+});
+
 /**
  * Articles Endpoints
  *
@@ -30,14 +38,17 @@
  * @param int $post_id The article post ID.
  * @return array The article data.
  */
-function get_article_data($post_id) {
+
+
+function get_article_data($post_id)
+{
     // Featured image.
     $image_url = get_the_post_thumbnail_url($post_id, 'full');
 
     // Basic post fields.
-    $title   = get_the_title($post_id);
+    $title = get_the_title($post_id);
     $excerpt = get_the_excerpt($post_id);
-    $slug    = get_post_field('post_name', $post_id);
+    $slug = get_post_field('post_name', $post_id);
 
     // "author" ACF field (post object) – return its title.
     $author_field = get_field('author', $post_id);
@@ -52,7 +63,7 @@ function get_article_data($post_id) {
 
     // ACF fields.
     $date_shamsi = get_field('date_shamsi', $post_id);
-    $time        = get_field('time', $post_id);
+    $time = get_field('time', $post_id);
 
     // Retrieve taxonomy terms from "categories".
     $terms = get_the_terms($post_id, 'categories');
@@ -60,7 +71,7 @@ function get_article_data($post_id) {
     if ($terms && !is_wp_error($terms)) {
         foreach ($terms as $term) {
             $categories[] = array(
-                'id'   => $term->term_id,
+                'id' => $term->term_id,
                 'name' => $term->name,
                 'slug' => $term->slug,
             );
@@ -68,41 +79,72 @@ function get_article_data($post_id) {
     }
 
     return array(
-        'image'       => $image_url,
-        'title'       => $title,
-        'excerpt'     => $excerpt,
-        'slug'        => $slug,
-        'author'      => $author_title,
+        'image' => $image_url,
+        'title' => $title,
+        'excerpt' => $excerpt,
+        'slug' => $slug,
+        'author' => $author_title,
         'date_shamsi' => $date_shamsi,
-        'time'        => $time,
-        'categories'  => $categories,
+        'time' => $time,
+        'categories' => $categories,
     );
 }
 
 /**
- * Endpoint: List Articles
- * URL: /wp-json/v1/articles
+ * Retrieve a paginated list of articles filtered by `categories` and `article_type`.
  *
- * Supports pagination:
+ * Query Parameters:
  * - page (default: 1)
  * - per_page (default: 10)
+ * - categories (comma-separated taxonomy slugs, optional)
+ * - article_type (comma-separated taxonomy slugs, optional)
+ *
+ * @param WP_REST_Request $request The request object.
+ * @return WP_REST_Response JSON response with articles data and pagination.
  */
-add_action('rest_api_init', function () {
-    register_rest_route('v1', '/articles', array(
-        'methods'  => 'GET',
-        'callback' => 'zaryab_get_articles',
-    ));
-});
+function zaryab_get_articles(WP_REST_Request $request)
+{
+    $page = (int)$request->get_param('page') ?: 1;
+    $per_page = (int)$request->get_param('per_page') ?: 10;
+    $categories = $request->get_param('categories');  // Optional filter
+    $article_type = $request->get_param('article_type'); // Optional filter
 
-function zaryab_get_articles(WP_REST_Request $request) {
-    $page     = (int) $request->get_param('page') ?: 1;
-    $per_page = (int) $request->get_param('per_page') ?: 10;
+    // Taxonomy filtering
+    $tax_query = array('relation' => 'AND');
 
+    // Add `categories` filter if provided
+    if (!empty($categories)) {
+        $category_slugs = explode(',', $categories);
+        $tax_query[] = array(
+            'taxonomy' => 'categories',
+            'field' => 'slug',
+            'terms' => $category_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Add `article_type` filter if provided
+    if (!empty($article_type)) {
+        $article_type_slugs = explode(',', $article_type);
+        $tax_query[] = array(
+            'taxonomy' => 'article_type',
+            'field' => 'slug',
+            'terms' => $article_type_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Query args
     $args = array(
-        'post_type'      => 'articles',
+        'post_type' => 'articles',
         'posts_per_page' => $per_page,
-        'paged'          => $page,
+        'paged' => $page,
     );
+
+    // Add taxonomy filtering if at least one filter is applied
+    if (!empty($categories) || !empty($article_type)) {
+        $args['tax_query'] = $tax_query;
+    }
 
     $query = new WP_Query($args);
     $articles = array();
@@ -115,18 +157,20 @@ function zaryab_get_articles(WP_REST_Request $request) {
         wp_reset_postdata();
     }
 
+    // Prepare response with pagination meta
     $response = array(
         'data' => $articles,
         'meta' => array(
-            'total'    => (int) $query->found_posts,
-            'pages'    => (int) $query->max_num_pages,
-            'page'     => $page,
+            'total' => (int)$query->found_posts,
+            'pages' => (int)$query->max_num_pages,
+            'page' => $page,
             'per_page' => $per_page,
         ),
     );
 
     return new WP_REST_Response($response, 200);
 }
+
 
 /**
  * Endpoint: Similar Articles
@@ -137,12 +181,13 @@ function zaryab_get_articles(WP_REST_Request $request) {
  */
 add_action('rest_api_init', function () {
     register_rest_route('v1', '/articles/similar/(?P<slug>[a-z0-9-]+)', array(
-        'methods'  => 'GET',
+        'methods' => 'GET',
         'callback' => 'zaryab_get_similar_articles',
     ));
 });
 
-function zaryab_get_similar_articles(WP_REST_Request $request) {
+function zaryab_get_similar_articles(WP_REST_Request $request)
+{
     $slug = $request->get_param('slug');
 
     // Retrieve the article by slug.
@@ -152,14 +197,14 @@ function zaryab_get_similar_articles(WP_REST_Request $request) {
     }
     $exclude_id = $article_post->ID;
 
-    $page     = (int) $request->get_param('page') ?: 1;
-    $per_page = (int) $request->get_param('per_page') ?: 10;
+    $page = (int)$request->get_param('page') ?: 1;
+    $per_page = (int)$request->get_param('per_page') ?: 10;
 
     $args = array(
-        'post_type'      => 'articles',
+        'post_type' => 'articles',
         'posts_per_page' => $per_page,
-        'paged'          => $page,
-        'post__not_in'   => array($exclude_id),
+        'paged' => $page,
+        'post__not_in' => array($exclude_id),
     );
 
     $query = new WP_Query($args);
@@ -176,9 +221,9 @@ function zaryab_get_similar_articles(WP_REST_Request $request) {
     $response = array(
         'data' => $articles,
         'meta' => array(
-            'total'    => (int) $query->found_posts,
-            'pages'    => (int) $query->max_num_pages,
-            'page'     => $page,
+            'total' => (int)$query->found_posts,
+            'pages' => (int)$query->max_num_pages,
+            'page' => $page,
             'per_page' => $per_page,
         ),
     );
@@ -206,12 +251,13 @@ function zaryab_get_similar_articles(WP_REST_Request $request) {
  */
 add_action('rest_api_init', function () {
     register_rest_route('v1', '/articles/(?P<slug>[a-z0-9-]+)', array(
-        'methods'  => 'GET',
+        'methods' => 'GET',
         'callback' => 'zaryab_get_single_article',
     ));
 });
 
-function zaryab_get_single_article(WP_REST_Request $request) {
+function zaryab_get_single_article(WP_REST_Request $request)
+{
     $slug = $request->get_param('slug');
 
     $article_post = get_page_by_path($slug, OBJECT, 'articles');
@@ -232,7 +278,7 @@ function zaryab_get_single_article(WP_REST_Request $request) {
     if ($terms && !is_wp_error($terms)) {
         foreach ($terms as $term) {
             $categories[] = array(
-                'id'   => $term->term_id,
+                'id' => $term->term_id,
                 'name' => $term->name,
                 'slug' => $term->slug,
             );
@@ -246,28 +292,28 @@ function zaryab_get_single_article(WP_REST_Request $request) {
         $author_id = $author_field->ID;
         $author_data = array(
             'featured_image' => get_the_post_thumbnail_url($author_id, 'full'),
-            'name'           => get_the_title($author_id),
-            'location'       => get_field('location', $author_id),
-            'job'            => get_field('job', $author_id),
-            'total_letters'  => get_field('total_letters', $author_id),
-            'age'            => get_field('age', $author_id),
-            'facebook'       => get_field('facebook', $author_id),
-            'instagram'      => get_field('instagram', $author_id),
-            'telegram'       => get_field('telegram', $author_id),
-            'youtube'        => get_field('youtube', $author_id),
+            'name' => get_the_title($author_id),
+            'location' => get_field('location', $author_id),
+            'job' => get_field('job', $author_id),
+            'total_letters' => get_field('total_letters', $author_id),
+            'age' => get_field('age', $author_id),
+            'facebook' => get_field('facebook', $author_id),
+            'instagram' => get_field('instagram', $author_id),
+            'telegram' => get_field('telegram', $author_id),
+            'youtube' => get_field('youtube', $author_id),
         );
     }
 
     $content = apply_filters('the_content', $article_post->post_content);
 
     $data = array(
-        'big_image'   => $big_image,
-        'title'       => $title,
+        'big_image' => $big_image,
+        'title' => $title,
         'date_shamsi' => $date_shamsi,
-        'time'        => $time,
-        'categories'  => $categories,
-        'author'      => $author_data,
-        'content'     => $content,
+        'time' => $time,
+        'categories' => $categories,
+        'author' => $author_data,
+        'content' => $content,
     );
 
     return new WP_REST_Response($data, 200);
