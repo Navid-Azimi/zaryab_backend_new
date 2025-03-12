@@ -2,7 +2,7 @@
 // Register the REST API route for listing letters with filtering.
 add_action('rest_api_init', function () {
     register_rest_route('v1', '/letters', array(
-        'methods'  => 'GET',
+        'methods' => 'GET',
         'callback' => 'zaryab_get_letters',
     ));
 });
@@ -11,58 +11,77 @@ add_action('rest_api_init', function () {
 // Register the REST API route for retrieving a single letter by slug.
 add_action('rest_api_init', function () {
     register_rest_route('v1', '/letters/(?P<slug>[a-z0-9-]+)', array(
-        'methods'  => 'GET',
+        'methods' => 'GET',
         'callback' => 'zaryab_get_single_letter',
     ));
 });
 
 
 /**
- * Callback function for retrieving a list of letters.
+ * Retrieve a paginated list of letters filtered by `letter_type`.
  *
- * Supports filtering by letter type:
- * - all (default): Retrieves all letters.
- * - archive: Retrieves only archived letters.
- * - non-archive: Retrieves only non-archived letters.
+ * Supports filtering by:
+ * - `all` (default): Retrieves all letters.
+ * - `archive`: Retrieves only archived letters.
+ * - `non-archive`: Retrieves only non-archived letters.
+ * - Specific `letter_type` taxonomy slugs (comma-separated, optional).
  *
  * Query Parameters:
  * - page (default: 1)
  * - per_page (default: 10)
  * - type (letter type filter: all, archive, non-archive)
+ * - letter_type (comma-separated taxonomy slugs, optional)
  *
  * @param WP_REST_Request $request The current request object.
  * @return WP_REST_Response JSON response containing letters data and meta information.
  */
-function zaryab_get_letters(WP_REST_Request $request) {
+function zaryab_get_letters(WP_REST_Request $request)
+{
     // Retrieve pagination parameters.
-    $page     = (int) $request->get_param('page') ?: 1;
-    $per_page = (int) $request->get_param('per_page') ?: 10;
-    $type     = $request->get_param('type') ?: 'all'; // Filter type: all, archive, non-archive
+    $page = (int)$request->get_param('page') ?: 1;
+    $per_page = (int)$request->get_param('per_page') ?: 10;
+    $type = $request->get_param('type') ?: 'all'; // Filter type: all, archive, non-archive
+    $letter_type = $request->get_param('letter_type');   // Optional filter by letter_type taxonomy
 
     $args = array(
-        'post_type'      => 'letters',
+        'post_type' => 'letters',
         'posts_per_page' => $per_page,
-        'paged'          => $page,
+        'paged' => $page,
     );
 
-    // Modify query based on letter type filter.
+    // Initialize taxonomy filtering
+    $tax_query = array();
+
+    // Apply predefined filters for archive and non-archive letters
     if ($type === 'archive') {
-        $args['tax_query'] = array(
-            array(
-                'taxonomy' => 'letter_type',
-                'field'    => 'slug',
-                'terms'    => 'archive',
-            ),
+        $tax_query[] = array(
+            'taxonomy' => 'letter_type',
+            'field' => 'slug',
+            'terms' => 'archive',
         );
     } elseif ($type === 'non-archive') {
-        $args['tax_query'] = array(
-            array(
-                'taxonomy' => 'letter_type',
-                'field'    => 'slug',
-                'terms'    => 'archive',
-                'operator' => 'NOT IN',
-            ),
+        $tax_query[] = array(
+            'taxonomy' => 'letter_type',
+            'field' => 'slug',
+            'terms' => 'archive',
+            'operator' => 'NOT IN',
         );
+    }
+
+    // Add letter_type taxonomy filtering if provided
+    if (!empty($letter_type)) {
+        $letter_type_slugs = explode(',', $letter_type);
+        $tax_query[] = array(
+            'taxonomy' => 'letter_type',
+            'field' => 'slug',
+            'terms' => $letter_type_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
+
+    // Apply taxonomy filters if any are set
+    if (!empty($tax_query)) {
+        $args['tax_query'] = $tax_query;
     }
 
     $query = new WP_Query($args);
@@ -79,11 +98,11 @@ function zaryab_get_letters(WP_REST_Request $request) {
 
             $letters[] = array(
                 'featured_image' => get_the_post_thumbnail_url($letter_id, 'full'),
-                'title'          => get_the_title(),
-                'number'         => get_field('number', $letter_id),
-                'release_date'   => get_field('release_date', $letter_id),
-                'slug'           => get_post_field('post_name', $letter_id),
-                'pdf'            => $pdf_url,
+                'title' => get_the_title(),
+                'number' => get_field('number', $letter_id),
+                'release_date' => get_field('release_date', $letter_id),
+                'slug' => get_post_field('post_name', $letter_id),
+                'pdf' => $pdf_url,
             );
         }
         wp_reset_postdata();
@@ -93,9 +112,9 @@ function zaryab_get_letters(WP_REST_Request $request) {
     $response = array(
         'data' => $letters,
         'meta' => array(
-            'total'    => (int) $query->found_posts,
-            'pages'    => (int) $query->max_num_pages,
-            'page'     => $page,
+            'total' => (int)$query->found_posts,
+            'pages' => (int)$query->max_num_pages,
+            'page' => $page,
             'per_page' => $per_page,
         ),
     );
@@ -115,14 +134,15 @@ function zaryab_get_letters(WP_REST_Request $request) {
  * @param WP_REST_Request $request The current request object.
  * @return WP_REST_Response|WP_Error JSON response containing letter details or an error if not found.
  */
-function zaryab_get_single_letter(WP_REST_Request $request) {
+function zaryab_get_single_letter(WP_REST_Request $request)
+{
     // Retrieve the letter slug from the URL.
     $slug = $request->get_param('slug');
 
     // Query for the letter post using the slug.
     $args = array(
-        'post_type'      => 'letters',
-        'name'           => $slug,
+        'post_type' => 'letters',
+        'name' => $slug,
         'posts_per_page' => 1,
     );
 
@@ -143,7 +163,7 @@ function zaryab_get_single_letter(WP_REST_Request $request) {
             the_row();
             $images[] = array(
                 'number' => get_sub_field('number'),
-                'image'  => get_sub_field('image')['url'], // Only return image URL.
+                'image' => get_sub_field('image')['url'], // Only return image URL.
             );
         }
     }
@@ -151,7 +171,7 @@ function zaryab_get_single_letter(WP_REST_Request $request) {
     // Build the response.
     $data = array(
         'number' => get_field('number', $letter_id),
-        'title'  => get_the_title(),
+        'title' => get_the_title(),
         'images' => $images,
     );
 
