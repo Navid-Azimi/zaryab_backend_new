@@ -23,11 +23,12 @@ add_action('rest_api_init', function () {
 });
 
 /**
- * Callback function for retrieving a list of podcasts.
+ * Retrieve a paginated list of podcasts filtered by `podcast_type`.
  *
- * Supports pagination using query parameters:
+ * Query Parameters:
  * - page (default: 1)
  * - per_page (default: 10)
+ * - podcast_type (comma-separated taxonomy slugs, optional)
  *
  * Each podcast includes:
  * - image (from the ACF field "image")
@@ -43,14 +44,32 @@ add_action('rest_api_init', function () {
  */
 function zaryab_get_podcasts(WP_REST_Request $request) {
     // Retrieve pagination parameters.
-    $page     = (int) $request->get_param('page') ?: 1;
-    $per_page = (int) $request->get_param('per_page') ?: 21;
+    $page         = (int) $request->get_param('page') ?: 1;
+    $per_page     = (int) $request->get_param('per_page') ?: 21;
+    $podcast_type = $request->get_param('podcast_type'); // Optional filter
+
+    // Taxonomy filtering
+    $tax_query = array();
+    if (!empty($podcast_type)) {
+        $podcast_type_slugs = explode(',', $podcast_type);
+        $tax_query[] = array(
+            'taxonomy' => 'podcast_type',
+            'field'    => 'slug',
+            'terms'    => $podcast_type_slugs,
+            'operator' => 'IN', // Allows filtering by multiple slugs
+        );
+    }
 
     $args = array(
         'post_type'      => 'podcast',
         'posts_per_page' => $per_page,
         'paged'          => $page,
     );
+
+    // Add taxonomy filtering if applied
+    if (!empty($podcast_type)) {
+        $args['tax_query'] = $tax_query;
+    }
 
     $query = new WP_Query($args);
     $podcasts = array();
@@ -65,7 +84,7 @@ function zaryab_get_podcasts(WP_REST_Request $request) {
             $image_url = (is_array($image_field) && isset($image_field['url'])) ? $image_field['url'] : $image_field;
 
             $podcasts[] = array(
-                'image' => get_the_post_thumbnail_url(),
+                'image'    => get_the_post_thumbnail_url($podcast_id, 'full'),
                 'slug'     => get_post_field('post_name', $podcast_id),
                 'name'     => get_the_title(),
                 'host'     => get_field('host', $podcast_id),
@@ -90,6 +109,7 @@ function zaryab_get_podcasts(WP_REST_Request $request) {
 
     return new WP_REST_Response($response, 200);
 }
+
 
 
 /**
