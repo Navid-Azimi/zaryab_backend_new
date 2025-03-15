@@ -225,6 +225,7 @@ function zaryab_get_single_poem(WP_REST_Request $request)
     // Build the final response.
     $data = array(
         'title' => get_the_title($poem_id),
+        'featured_image' => get_the_post_thumbnail_url($poem_id),
         'poem_collection' => $poem_collection_list,
         'date' => get_field('date', $poem_id),
         'time' => get_field('time', $poem_id),
