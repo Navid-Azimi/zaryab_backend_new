@@ -172,6 +172,7 @@ function zaryab_get_single_letter(WP_REST_Request $request)
     $data = array(
         'number' => get_field('number', $letter_id),
         'title' => get_the_title(),
+        'featured_image' => get_the_post_thumbnail_url($letter_id),
         'images' => $images,
     );
 
