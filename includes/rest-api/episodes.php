@@ -86,7 +86,7 @@ function zaryab_get_single_episode(WP_REST_Request $request)
         'date' => get_field('date', $episode_id),
         'time' => get_field('time', $episode_id),
         'story_slug' => $story_slug,
-        'content' => apply_filters('the_content', get_the_content()),
+        'content' => apply_filters('the_content', get_post_field('post_content', $episode_id)),
         'episode_title' => get_field('episode_title', $episode_id),
         'previous_episode' => $previous_episode_slug,
         'next_episode' => $next_episode_slug,
