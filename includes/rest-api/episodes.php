@@ -83,6 +83,7 @@ function zaryab_get_single_episode(WP_REST_Request $request)
         'author' => $author_data,
         'collection' => $collection,
         'categories' => $categories,
+        'featured_image' => get_the_post_thumbnail_url($episode_id),
         'date' => get_field('date', $episode_id),
         'time' => get_field('time', $episode_id),
         'story_slug' => $story_slug,
