@@ -162,6 +162,7 @@ function zaryab_get_story_episodes(WP_REST_Request $request)
     }
     $story_id = $story->ID;
     $story_title = get_the_title($story_id);
+    $story_image = get_the_post_thumbnail_url($story_id);
 
     // Query for episodes linked to this story
     $meta_query = array(
@@ -260,6 +261,7 @@ function zaryab_get_story_episodes(WP_REST_Request $request)
     // Prepare response with pagination meta
     $response = array(
         'story_title' => $story_title,
+        'story_image' => $story_image,
         'data' => $episodes,
         'meta' => array(
             'total' => (int)$query->found_posts,
