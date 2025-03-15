@@ -410,6 +410,7 @@ function zaryab_get_stories_by_collection(WP_REST_Request $request)
 
     $query = new WP_Query($args);
     $stories = array();
+    $collection_name = '';
 
     if ($query->have_posts()) {
         while ($query->have_posts()) {
@@ -421,8 +422,13 @@ function zaryab_get_stories_by_collection(WP_REST_Request $request)
             $author_name  = is_object($author_field) ? get_the_title($author_field->ID) : '';
 
             // Retrieve taxonomy terms (categories)
-            $terms = get_the_terms($story_id, 'categories');
-            $categories = zaryab_format_taxonomy($terms);
+            $categories = zaryab_format_taxonomy(get_the_terms($story_id, 'categories'));
+
+            // Retrieve collection name
+            $collection_terms = get_the_terms($story_id, 'collection');
+            if ($collection_terms && !is_wp_error($collection_terms)) {
+                $collection_name = $collection_terms[0]->name; // Get the first collection name
+            }
 
             $stories[] = array(
                 'featured_image' => get_the_post_thumbnail_url($story_id, 'full'),
@@ -440,8 +446,9 @@ function zaryab_get_stories_by_collection(WP_REST_Request $request)
 
     // Prepare response with pagination meta
     $response = array(
-        'data' => $stories,
-        'meta' => array(
+        'collection_name' => $collection_name, // Add collection name to response
+        'data'           => $stories,
+        'meta'           => array(
             'total'    => (int) $query->found_posts,
             'pages'    => (int) $query->max_num_pages,
             'page'     => $page,
