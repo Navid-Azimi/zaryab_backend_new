@@ -312,6 +312,7 @@ function zaryab_get_similar_poems(WP_REST_Request $request)
     return new WP_REST_Response($response, 200);
 }
 
+
 /**
  * Retrieve paginated poems filtered by `poem_collection`, `categories`, and `poem_type`.
  *
@@ -376,6 +377,17 @@ function zaryab_get_poems_by_collection(WP_REST_Request $request)
     $poems = array();
     $collection_name = '';
 
+    // Ensure collection name is always returned, even if no posts are found
+    $collection_terms = get_terms(array(
+        'taxonomy' => 'poem_collection',
+        'slug' => $slug,
+        'hide_empty' => false, // Ensure the collection is returned even if empty
+    ));
+
+    if ($collection_terms && !is_wp_error($collection_terms)) {
+        $collection_name = $collection_terms[0]->name; // Get the first collection name
+    }
+
     if ($query->have_posts()) {
         while ($query->have_posts()) {
             $query->the_post();
@@ -391,12 +403,6 @@ function zaryab_get_poems_by_collection(WP_REST_Request $request)
 
             // Retrieve taxonomy terms (poem_type)
             $poem_types = zaryab_format_taxonomy(get_the_terms($poem_id, 'poem_type'));
-
-            // Retrieve the collection name
-            $collection_terms = get_the_terms($poem_id, 'poem_collection');
-            if ($collection_terms && !is_wp_error($collection_terms)) {
-                $collection_name = $collection_terms[0]->name; // Get the first collection name
-            }
 
             $poems[] = array(
                 'title' => get_the_title(),
@@ -414,7 +420,7 @@ function zaryab_get_poems_by_collection(WP_REST_Request $request)
 
     // Prepare response with pagination meta
     $response = array(
-        'collection_name' => $collection_name, // Add collection name to response
+        'collection_name' => $collection_name, // Always return the collection name
         'data' => $poems,
         'meta' => array(
             'total' => (int)$query->found_posts,
@@ -426,3 +432,4 @@ function zaryab_get_poems_by_collection(WP_REST_Request $request)
 
     return new WP_REST_Response($response, 200);
 }
+
